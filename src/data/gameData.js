@@ -17,8 +17,9 @@ export const PRIZE_LADDER = [
     { level: 15, amount: '₹7 Crores', isMilestone: true },
 ];
 
-// Questions data - 15 questions with increasing difficulty
-export const QUESTIONS = [
+// Fallback questions - used when API fails
+// These are kept as backup questions in case Gemini API is unavailable
+export const FALLBACK_QUESTIONS = [
     {
         id: 1,
         question: 'Which planet is known as the Red Planet?',

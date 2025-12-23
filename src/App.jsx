@@ -3,11 +3,13 @@ import Question from './components/Question';
 import Option from './components/Option';
 import MoneyLadder from './components/MoneyLadder';
 import GameOver from './components/GameOver';
-import { QUESTIONS, PRIZE_LADDER } from './data/gameData';
+import { PRIZE_LADDER, FALLBACK_QUESTIONS } from './data/gameData';
+import { fetchQuestion } from './services/gemini';
 import { playAudio } from './utils/audio';
 
 function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isLocked, setIsLocked] = useState(false);
   const [isRevealed, setIsRevealed] = useState(false);
@@ -16,21 +18,54 @@ function App() {
   const [showNextButton, setShowNextButton] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [totalWinnings, setTotalWinnings] = useState('₹0');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const currentQuestion = QUESTIONS[currentQuestionIndex];
   const currentPrize = PRIZE_LADDER[currentQuestionIndex]?.amount || '₹0';
+  const currentLevel = currentQuestionIndex + 1;
 
+  // Fetch question when level changes
   useEffect(() => {
-    // Reset states when moving to next question
-    if (currentQuestionIndex < QUESTIONS.length) {
+    const loadQuestion = async () => {
+      if (currentLevel > 15) {
+        // Game completed
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
       setSelectedOption(null);
       setIsLocked(false);
       setIsRevealed(false);
       setIsCorrect(false);
       setIsWrong(false);
       setShowNextButton(false);
-    }
-  }, [currentQuestionIndex]);
+
+      try {
+        console.log('🔄 Loading question for level:', currentLevel);
+        const question = await fetchQuestion(currentLevel);
+        console.log('✅ Question loaded successfully:', question.question.substring(0, 50) + '...');
+        setCurrentQuestion(question);
+        setError(null); // Clear any previous errors
+      } catch (err) {
+        console.error('❌ Failed to fetch question:', err);
+        console.error('❌ Error message:', err.message);
+        setError(err.message);
+        // Fallback to hardcoded question
+        console.warn('⚠️ Using fallback question');
+        if (FALLBACK_QUESTIONS[currentQuestionIndex]) {
+          setCurrentQuestion(FALLBACK_QUESTIONS[currentQuestionIndex]);
+        } else {
+          // If no fallback available, use first fallback question
+          setCurrentQuestion(FALLBACK_QUESTIONS[0]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadQuestion();
+  }, [currentQuestionIndex, currentLevel]);
 
   const handleOptionClick = (optionIndex) => {
     if (isLocked || isRevealed) return;
@@ -68,7 +103,7 @@ function App() {
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < QUESTIONS.length - 1) {
+    if (currentLevel < 15) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
       // All questions answered correctly
@@ -93,6 +128,27 @@ function App() {
     return <GameOver totalWinnings={totalWinnings} onRestart={handleRestart} />;
   }
 
+  // Show loading state
+  if (loading || !currentQuestion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400"></div>
+          </div>
+          <p className="text-2xl font-bold text-yellow-400">
+            Computer Ji, prashn dhund rahe hain...
+          </p>
+          {error && (
+            <p className="mt-4 text-red-300 text-sm">
+              API Error: {error}. Using fallback question.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 text-white">
       <div className="container mx-auto px-4 py-8">
@@ -101,7 +157,7 @@ function App() {
           <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh]">
             <Question
               questionText={currentQuestion.question}
-              questionNumber={currentQuestionIndex + 1}
+              questionNumber={currentLevel}
             />
 
             <div className="w-full max-w-3xl space-y-4">
@@ -132,7 +188,7 @@ function App() {
           {/* Money Ladder Sidebar */}
           <div className="lg:w-80 w-full lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)]">
             <div className="bg-blue-900/80 rounded-lg border-2 border-yellow-400/50 p-4 h-full overflow-y-auto">
-              <MoneyLadder currentLevel={currentQuestionIndex + 1} />
+              <MoneyLadder currentLevel={currentLevel} />
             </div>
           </div>
         </div>
