@@ -9,7 +9,8 @@ import { playAudio } from './utils/audio';
 import {
   getCachedQuestion,
   saveQuestionToCache,
-  isQuotaExhausted
+  isQuotaExhausted,
+  clearQuestionCache
 } from './utils/questionCache';
 
 // Track which levels are currently being fetched (prevents duplicate calls)
@@ -38,6 +39,9 @@ function App() {
     const loadQuestion = async () => {
       // 1. GAME OVER CHECK
       if (currentLevel > 15) return;
+
+      // Skip if game is over (will be handled by handleRestart)
+      if (gameOver) return;
 
       // 2. CHECK CACHE FIRST (localStorage with expiration)
       const cachedQuestion = getCachedQuestion(currentLevel);
@@ -135,7 +139,7 @@ function App() {
     };
 
     loadQuestion();
-  }, [currentQuestionIndex, currentLevel]);
+  }, [currentQuestionIndex, currentLevel, gameOver]);
 
   const handleOptionClick = (optionIndex) => {
     if (isLocked || isRevealed) return;
@@ -173,8 +177,17 @@ function App() {
   };
 
   const handleRestart = () => {
-    // Note: We don't clear localStorage here so you can restart freely without hitting API
+    // Clear cache so new game gets fresh questions
+    clearQuestionCache();
+
+    // Clear all fetch locks to allow fresh fetches
+    Object.keys(FETCH_LOCKS).forEach(key => delete FETCH_LOCKS[key]);
+
+    console.log('🔄 Starting new game - cache cleared');
+
+    // Reset all state
     setCurrentQuestionIndex(0);
+    setCurrentQuestion(null); // Clear current question to trigger fresh load
     setSelectedOption(null);
     setIsLocked(false);
     setIsRevealed(false);
@@ -183,6 +196,10 @@ function App() {
     setShowNextButton(false);
     setGameOver(false);
     setTotalWinnings('₹0');
+    setLoading(true); // Set loading to true to show loading screen
+    setUsingCache(false);
+    setError(null);
+    setQuotaExhausted(false);
   };
 
   if (gameOver) return <GameOver totalWinnings={totalWinnings} onRestart={handleRestart} />;
@@ -205,8 +222,8 @@ function App() {
         {/* Status Banner */}
         {(usingCache || quotaExhausted || error) && (
           <div className={`mb-4 p-3 rounded-lg text-center text-sm ${usingCache ? 'bg-green-900/50 text-green-200' :
-              quotaExhausted ? 'bg-orange-900/50 text-orange-200' :
-                'bg-blue-900/50 text-blue-200'
+            quotaExhausted ? 'bg-orange-900/50 text-orange-200' :
+              'bg-blue-900/50 text-blue-200'
             }`}>
             {usingCache && '💾 Using cached question'}
             {quotaExhausted && !usingCache && '⚠️ Daily API limit reached. Using fallback question.'}
