@@ -5,7 +5,7 @@ import MoneyLadder from './components/MoneyLadder';
 import GameOver from './components/GameOver';
 import { PRIZE_LADDER, FALLBACK_QUESTIONS } from './data/gameData';
 import { fetchQuestion } from './services/gemini';
-import { playAudio } from './utils/audio';
+import { playAudio, speakQuestionAndOptions } from './utils/audio';
 import {
   getCachedQuestion,
   saveQuestionToCache,
@@ -141,8 +141,34 @@ function App() {
     loadQuestion();
   }, [currentQuestionIndex, currentLevel, gameOver]);
 
+  // Speak question and options when a new question is loaded
+  useEffect(() => {
+    if (currentQuestion && !loading) {
+      // Wait a bit for the UI to render, then speak
+      const timer = setTimeout(() => {
+        speakQuestionAndOptions(
+          currentQuestion.question,
+          currentQuestion.options
+        );
+      }, 500);
+
+      return () => {
+        clearTimeout(timer);
+        // Stop speech if component unmounts or question changes
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
+      };
+    }
+  }, [currentQuestion, loading]);
+
   const handleOptionClick = (optionIndex) => {
     if (isLocked || isRevealed) return;
+
+    // Stop any ongoing speech when user selects an option
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
 
     setSelectedOption(optionIndex);
     setIsLocked(true);
@@ -168,6 +194,11 @@ function App() {
   };
 
   const handleNextQuestion = () => {
+    // Stop any ongoing speech when moving to next question
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
     if (currentLevel < 15) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
@@ -177,6 +208,11 @@ function App() {
   };
 
   const handleRestart = () => {
+    // Stop any ongoing speech when restarting
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
     // Clear cache so new game gets fresh questions
     clearQuestionCache();
 
