@@ -6,6 +6,14 @@ import GameOver from './components/GameOver';
 import { PRIZE_LADDER, FALLBACK_QUESTIONS } from './data/gameData';
 import { fetchQuestion } from './services/gemini';
 import { playAudio } from './utils/audio';
+import {
+  getCachedQuestion,
+  saveQuestionToCache,
+  isQuotaExhausted
+} from './utils/questionCache';
+
+// Track which levels are currently being fetched (prevents duplicate calls)
+const FETCH_LOCKS = {};
 
 function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -20,20 +28,58 @@ function App() {
   const [totalWinnings, setTotalWinnings] = useState('₹0');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [usingCache, setUsingCache] = useState(false);
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
 
   const currentPrize = PRIZE_LADDER[currentQuestionIndex]?.amount || '₹0';
   const currentLevel = currentQuestionIndex + 1;
 
-  // Fetch question when level changes
   useEffect(() => {
     const loadQuestion = async () => {
-      if (currentLevel > 15) {
-        // Game completed
+      // 1. GAME OVER CHECK
+      if (currentLevel > 15) return;
+
+      // 2. CHECK CACHE FIRST (localStorage with expiration)
+      const cachedQuestion = getCachedQuestion(currentLevel);
+      if (cachedQuestion) {
+        console.log(`💾 Using cached question for level ${currentLevel}`);
+        setCurrentQuestion(cachedQuestion);
+        setUsingCache(true);
+        setQuotaExhausted(isQuotaExhausted());
+        setLoading(false);
+        setError(null);
         return;
       }
 
+      // 3. CHECK IF QUOTA IS EXHAUSTED
+      const quotaExhausted = isQuotaExhausted();
+      setQuotaExhausted(quotaExhausted);
+
+      if (quotaExhausted) {
+        console.log('⚠️ Quota exhausted, using fallback question');
+        setError('Daily API limit reached. Using fallback question.');
+        if (FALLBACK_QUESTIONS[currentQuestionIndex]) {
+          setCurrentQuestion(FALLBACK_QUESTIONS[currentQuestionIndex]);
+        } else {
+          setCurrentQuestion(FALLBACK_QUESTIONS[0]);
+        }
+        setUsingCache(false);
+        setLoading(false);
+        return;
+      }
+
+      // 4. PREVENT DUPLICATE FETCHES
+      if (FETCH_LOCKS[currentLevel]) {
+        console.log(`🔒 Already fetching level ${currentLevel}`);
+        return;
+      }
+
+      // Mark as fetching
+      FETCH_LOCKS[currentLevel] = true;
+
       setLoading(true);
       setError(null);
+      setUsingCache(false);
       setSelectedOption(null);
       setIsLocked(false);
       setIsRevealed(false);
@@ -42,25 +88,49 @@ function App() {
       setShowNextButton(false);
 
       try {
-        console.log('🔄 Loading question for level:', currentLevel);
-        const question = await fetchQuestion(currentLevel);
-        console.log('✅ Question loaded successfully:', question.question.substring(0, 50) + '...');
+        console.log(`🚀 Fetching question from API for level ${currentLevel}`);
+
+        // Get history of previously asked questions from cache
+        const history = [];
+        for (let i = 1; i < currentLevel; i++) {
+          const cached = getCachedQuestion(i);
+          if (cached) {
+            history.push(cached.question);
+          }
+        }
+
+        const question = await fetchQuestion(currentLevel, history);
+
+        // Save to cache
+        saveQuestionToCache(currentLevel, question);
+
         setCurrentQuestion(question);
-        setError(null); // Clear any previous errors
+        setError(null);
+        setQuotaExhausted(false);
       } catch (err) {
-        console.error('❌ Failed to fetch question:', err);
-        console.error('❌ Error message:', err.message);
-        setError(err.message);
-        // Fallback to hardcoded question
-        console.warn('⚠️ Using fallback question');
+        console.error('❌ API Error:', err);
+
+        const isRateLimit = err.message && err.message.includes('429');
+        setQuotaExhausted(isRateLimit);
+
+        if (isRateLimit) {
+          setError('Daily API limit reached (20 requests/day). Using fallback question.');
+        } else {
+          setError('API error. Using fallback question.');
+        }
+
+        // Use fallback question
         if (FALLBACK_QUESTIONS[currentQuestionIndex]) {
           setCurrentQuestion(FALLBACK_QUESTIONS[currentQuestionIndex]);
         } else {
-          // If no fallback available, use first fallback question
           setCurrentQuestion(FALLBACK_QUESTIONS[0]);
         }
       } finally {
         setLoading(false);
+        // Release lock after delay
+        setTimeout(() => {
+          delete FETCH_LOCKS[currentLevel];
+        }, 2000);
       }
     };
 
@@ -74,7 +144,6 @@ function App() {
     setIsLocked(true);
     playAudio('lock');
 
-    // Wait 3 seconds before revealing answer
     setTimeout(() => {
       setIsRevealed(true);
       const correct = optionIndex === currentQuestion.correctAnswer;
@@ -84,35 +153,27 @@ function App() {
       if (correct) {
         playAudio('correct');
         setShowNextButton(true);
-        // Update total winnings
         setTotalWinnings(currentPrize);
       } else {
         playAudio('wrong');
-        // Calculate safe winnings (last correctly answered question's prize)
-        // If on question 1 (index 0) and wrong, get ₹0
-        // Otherwise, get the prize from the previous question (last correct answer)
-        const safePrize = currentQuestionIndex > 0
-          ? PRIZE_LADDER[currentQuestionIndex - 1]?.amount
-          : '₹0';
+        const safePrize = currentQuestionIndex > 0 ? PRIZE_LADDER[currentQuestionIndex - 1]?.amount : '₹0';
         setTotalWinnings(safePrize);
-        setTimeout(() => {
-          setGameOver(true);
-        }, 2000);
+        setTimeout(() => { setGameOver(true); }, 2000);
       }
     }, 3000);
   };
 
   const handleNextQuestion = () => {
     if (currentLevel < 15) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      // All questions answered correctly
       setTotalWinnings(PRIZE_LADDER[PRIZE_LADDER.length - 1].amount);
       setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    // Note: We don't clear localStorage here so you can restart freely without hitting API
     setCurrentQuestionIndex(0);
     setSelectedOption(null);
     setIsLocked(false);
@@ -124,26 +185,15 @@ function App() {
     setTotalWinnings('₹0');
   };
 
-  if (gameOver) {
-    return <GameOver totalWinnings={totalWinnings} onRestart={handleRestart} />;
-  }
+  if (gameOver) return <GameOver totalWinnings={totalWinnings} onRestart={handleRestart} />;
 
-  // Show loading state
   if (loading || !currentQuestion) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="mb-4">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400"></div>
-          </div>
-          <p className="text-2xl font-bold text-yellow-400">
-            Computer Ji, prashn dhund rahe hain...
-          </p>
-          {error && (
-            <p className="mt-4 text-red-300 text-sm">
-              API Error: {error}. Using fallback question.
-            </p>
-          )}
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400 mx-auto mb-4"></div>
+          <p className="text-2xl font-bold text-yellow-400">Computer Ji, prashn dhund rahe hain...</p>
+          {error && <p className="text-red-300 mt-2 text-sm">{error}</p>}
         </div>
       </div>
     );
@@ -152,19 +202,26 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 text-white">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Main Game Area */}
-          <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh]">
-            <Question
-              questionText={currentQuestion.question}
-              questionNumber={currentLevel}
-            />
+        {/* Status Banner */}
+        {(usingCache || quotaExhausted || error) && (
+          <div className={`mb-4 p-3 rounded-lg text-center text-sm ${usingCache ? 'bg-green-900/50 text-green-200' :
+              quotaExhausted ? 'bg-orange-900/50 text-orange-200' :
+                'bg-blue-900/50 text-blue-200'
+            }`}>
+            {usingCache && '💾 Using cached question'}
+            {quotaExhausted && !usingCache && '⚠️ Daily API limit reached. Using fallback question.'}
+            {error && !quotaExhausted && !usingCache && error}
+          </div>
+        )}
 
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh]">
+            <Question questionText={currentQuestion.question} questionNumber={currentLevel} />
             <div className="w-full max-w-3xl space-y-4">
               {currentQuestion.options.map((option, index) => (
                 <Option
                   key={index}
-                  letter={String.fromCharCode(65 + index)} // A, B, C, D
+                  letter={String.fromCharCode(65 + index)}
                   text={option}
                   onClick={() => handleOptionClick(index)}
                   isLocked={isLocked && selectedOption === index}
@@ -174,18 +231,12 @@ function App() {
                 />
               ))}
             </div>
-
             {showNextButton && (
-              <button
-                onClick={handleNextQuestion}
-                className="mt-8 bg-yellow-400 text-blue-900 px-8 py-4 rounded-lg text-xl font-bold hover:bg-yellow-300 transform hover:scale-105 transition-all duration-200 shadow-lg"
-              >
+              <button onClick={handleNextQuestion} className="mt-8 bg-yellow-400 text-blue-900 px-8 py-4 rounded-lg text-xl font-bold hover:bg-yellow-300">
                 Next Question
               </button>
             )}
           </div>
-
-          {/* Money Ladder Sidebar */}
           <div className="lg:w-80 w-full lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)]">
             <div className="bg-blue-900/80 rounded-lg border-2 border-yellow-400/50 p-4 h-full overflow-y-auto">
               <MoneyLadder currentLevel={currentLevel} />
