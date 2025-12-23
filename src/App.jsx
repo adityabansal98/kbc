@@ -209,7 +209,7 @@ function App() {
       <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400 mx-auto mb-4"></div>
-          <p className="text-2xl font-bold text-yellow-400">Computer Ji, prashn dhund rahe hain...</p>
+          <p className="text-2xl font-bold text-yellow-400">अगला सवाल, आपकी स्क्रीन पर अब आ रहा है...</p>
           {error && <p className="text-red-300 mt-2 text-sm">{error}</p>}
         </div>
       </div>
