@@ -96,19 +96,49 @@ export const speakQuestionAndOptionsElevenLabs = async (question, options) => {
  * This function will be used to play different audio types
  * 
  * To use: Place your MP3 files in the /public/audio/ directory:
- * - lock.mp3 (plays when option is clicked/locked)
- * - correct.mp3 (plays when answer is correct)
- * - wrong.mp3 (plays when answer is wrong)
+ * - lock_amit.mp3 (plays when option is clicked/locked)
+ * - correct_amit.mp3 (plays when answer is correct)
+ * - wrong_amit.mp3 (plays when answer is wrong)
+ * - question.mp3 (plays before question appears)
  * 
- * @param {string} type - Type of audio to play ('lock', 'correct', 'wrong')
+ * @param {string} type - Type of audio to play ('lock', 'correct', 'wrong', 'question')
  */
 export const playAudio = (type) => {
-    // Uncomment the following lines when MP3 files are placed in /public/audio/
-    const audio = new Audio(`/audio/${type}_amit.mp3`);
+    // question.mp3 doesn't have _amit suffix, others do
+    const filename = type === 'question' ? `${type}.mp3` : `${type}_amit.mp3`;
+    const audio = new Audio(`/audio/${filename}`);
     audio.volume = 0.7; // Adjust volume as needed
     audio.play().catch(err => console.error('Audio playback failed:', err));
 
     console.log(`Playing audio: ${type}`);
+};
+
+/**
+ * Plays the question sound effect and returns a promise that resolves when it finishes
+ * @returns {Promise<void>} Resolves when question sound effect finishes playing
+ */
+export const playQuestionSound = () => {
+    return new Promise((resolve, reject) => {
+        const audio = new Audio('/audio/question.mp3');
+        audio.volume = 0.7;
+
+        audio.addEventListener('ended', () => {
+            console.log("✅ Question sound effect finished");
+            resolve();
+        }, { once: true });
+
+        audio.addEventListener('error', (err) => {
+            console.error("Question sound effect error:", err);
+            // Resolve anyway so we don't block the game
+            resolve();
+        }, { once: true });
+
+        audio.play().catch(err => {
+            console.error('Question sound playback failed:', err);
+            // Resolve anyway so we don't block the game
+            resolve();
+        });
+    });
 };
 
 /**

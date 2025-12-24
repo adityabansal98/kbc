@@ -5,7 +5,7 @@ import MoneyLadder from './components/MoneyLadder';
 import GameOver from './components/GameOver';
 import { PRIZE_LADDER, FALLBACK_QUESTIONS } from './data/gameData';
 import { fetchQuestion } from './services/gemini';
-import { playAudio, speakQuestionAndOptions, speakQuestionAndOptionsElevenLabs } from './utils/audio';
+import { playAudio, speakQuestionAndOptions, speakQuestionAndOptionsElevenLabs, playQuestionSound } from './utils/audio';
 import {
   getCachedQuestion,
   saveQuestionToCache,
@@ -61,16 +61,22 @@ function App() {
         )
           .then((audio) => {
             console.log("✅ Audio ready for cached question");
-            setAudioReady(true);
-            setLoading(false);
-            // Start playing audio when question screen appears
-            audio.play().catch(err => console.error("Audio play failed:", err));
+            // Play question sound effect and wait for it to finish
+            playQuestionSound().then(() => {
+              setAudioReady(true);
+              setLoading(false);
+              // Start playing text audio after question sound finishes
+              audio.play().catch(err => console.error("Audio play failed:", err));
+            });
           })
           .catch((err) => {
             console.error("❌ Audio generation failed:", err);
-            // Still show question even if audio fails
-            setAudioReady(true);
-            setLoading(false);
+            // Play question sound effect even if audio fails
+            playQuestionSound().then(() => {
+              // Still show question even if audio fails
+              setAudioReady(true);
+              setLoading(false);
+            });
           });
         return;
       }
@@ -94,16 +100,22 @@ function App() {
         )
           .then((audio) => {
             console.log("✅ Audio ready for fallback question");
-            setAudioReady(true);
-            setLoading(false);
-            // Start playing audio when question screen appears
-            audio.play().catch(err => console.error("Audio play failed:", err));
+            // Play question sound effect and wait for it to finish
+            playQuestionSound().then(() => {
+              setAudioReady(true);
+              setLoading(false);
+              // Start playing text audio after question sound finishes
+              audio.play().catch(err => console.error("Audio play failed:", err));
+            });
           })
           .catch((err) => {
             console.error("❌ Audio generation failed:", err);
-            // Still show question even if audio fails
-            setAudioReady(true);
-            setLoading(false);
+            // Play question sound effect even if audio fails
+            playQuestionSound().then(() => {
+              // Still show question even if audio fails
+              setAudioReady(true);
+              setLoading(false);
+            });
           });
         return;
       }
@@ -157,16 +169,22 @@ function App() {
         )
           .then((audio) => {
             console.log("✅ Audio ready - showing question");
-            setAudioReady(true);
-            setLoading(false);
-            // Start playing audio when question screen appears
-            audio.play().catch(err => console.error("Audio play failed:", err));
+            // Play question sound effect and wait for it to finish
+            playQuestionSound().then(() => {
+              setAudioReady(true);
+              setLoading(false);
+              // Start playing text audio after question sound finishes
+              audio.play().catch(err => console.error("Audio play failed:", err));
+            });
           })
           .catch((err) => {
             console.error("❌ Audio generation failed:", err);
-            // Still show question even if audio fails
-            setAudioReady(true);
-            setLoading(false);
+            // Play question sound effect even if audio fails
+            playQuestionSound().then(() => {
+              // Still show question even if audio fails
+              setAudioReady(true);
+              setLoading(false);
+            });
           });
       } catch (err) {
         console.error('❌ API Error:', err);
@@ -191,16 +209,22 @@ function App() {
         )
           .then((audio) => {
             console.log("✅ Audio ready for fallback question");
-            setAudioReady(true);
-            setLoading(false);
-            // Start playing audio when question screen appears
-            audio.play().catch(err => console.error("Audio play failed:", err));
+            // Play question sound effect and wait for it to finish
+            playQuestionSound().then(() => {
+              setAudioReady(true);
+              setLoading(false);
+              // Start playing text audio after question sound finishes
+              audio.play().catch(err => console.error("Audio play failed:", err));
+            });
           })
           .catch((err) => {
             console.error("❌ Audio generation failed:", err);
-            // Still show question even if audio fails
-            setAudioReady(true);
-            setLoading(false);
+            // Play question sound effect even if audio fails
+            playQuestionSound().then(() => {
+              // Still show question even if audio fails
+              setAudioReady(true);
+              setLoading(false);
+            });
           });
       } finally {
         // Release lock after delay
