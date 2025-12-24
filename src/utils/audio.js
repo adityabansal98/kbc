@@ -1,5 +1,5 @@
 const ELEVEN_LABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY;
-const VOICE_ID = 'zgqefOY5FPQ3bB7OZTVR'; // The voice ID you shared
+const VOICE_ID = 'MkREn5Yzha4EnP3Dx0Sk'; // The voice ID you shared
 
 // Play ElevenLabs Voice
 /**
@@ -87,7 +87,7 @@ export const speakQuestionAndOptionsElevenLabs = async (question, options) => {
  */
 export const playAudio = (type) => {
     // Uncomment the following lines when MP3 files are placed in /public/audio/
-    const audio = new Audio(`/audio/${type}.mp3`);
+    const audio = new Audio(`/audio/${type}_amit.mp3`);
     audio.volume = 0.7; // Adjust volume as needed
     audio.play().catch(err => console.error('Audio playback failed:', err));
 
