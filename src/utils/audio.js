@@ -3,14 +3,16 @@ const VOICE_ID = 'MkREn5Yzha4EnP3Dx0Sk'; // The voice ID you shared
 
 // Play ElevenLabs Voice
 /**
- * Speaks a question and its options sequentially using ElevenLabs
+ * Generates audio for a question and its options using ElevenLabs
+ * Returns a Promise that resolves with the audio element when ready to play
  * @param {string} question - The question text
  * @param {Array<string>} options - Array of option texts
+ * @returns {Promise<HTMLAudioElement>} Resolves with audio element when ready
  */
 export const speakQuestionAndOptionsElevenLabs = async (question, options) => {
     if (!ELEVEN_LABS_API_KEY) {
         console.error("Missing VITE_ELEVENLABS_API_KEY in .env");
-        return;
+        return Promise.reject(new Error("Missing API key"));
     }
 
     // 1. Stop any currently playing audio (essential for game restarts/next question)
@@ -59,7 +61,7 @@ export const speakQuestionAndOptionsElevenLabs = async (question, options) => {
             throw new Error(errData.detail?.message || "ElevenLabs API Error");
         }
 
-        // 4. Play the result
+        // 4. Load the audio and wait for it to be ready
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
@@ -67,10 +69,25 @@ export const speakQuestionAndOptionsElevenLabs = async (question, options) => {
         // Save reference globally so we can stop it if the user clicks "Next" quickly
         window.currentKbcAudio = audio;
 
-        audio.play();
+        // Return a promise that resolves when audio is loaded and ready to play
+        return new Promise((resolve, reject) => {
+            audio.addEventListener('canplaythrough', () => {
+                console.log("✅ Audio ready to play");
+                resolve(audio);
+            }, { once: true });
+
+            audio.addEventListener('error', (err) => {
+                console.error("Audio load error:", err);
+                reject(err);
+            }, { once: true });
+
+            // Load the audio
+            audio.load();
+        });
 
     } catch (error) {
         console.error("TTS Error:", error);
+        return Promise.reject(error);
     }
 };
 

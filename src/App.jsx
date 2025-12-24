@@ -31,6 +31,7 @@ function App() {
   const [error, setError] = useState(null);
   const [usingCache, setUsingCache] = useState(false);
   const [quotaExhausted, setQuotaExhausted] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
 
   const currentPrize = PRIZE_LADDER[currentQuestionIndex]?.amount || '₹0';
   const currentLevel = currentQuestionIndex + 1;
@@ -50,8 +51,27 @@ function App() {
         setCurrentQuestion(cachedQuestion);
         setUsingCache(true);
         setQuotaExhausted(isQuotaExhausted());
-        setLoading(false);
         setError(null);
+        setAudioReady(false);
+
+        // Generate audio in parallel while showing loading screen
+        speakQuestionAndOptionsElevenLabs(
+          cachedQuestion.question,
+          cachedQuestion.options
+        )
+          .then((audio) => {
+            console.log("✅ Audio ready for cached question");
+            setAudioReady(true);
+            setLoading(false);
+            // Start playing audio when question screen appears
+            audio.play().catch(err => console.error("Audio play failed:", err));
+          })
+          .catch((err) => {
+            console.error("❌ Audio generation failed:", err);
+            // Still show question even if audio fails
+            setAudioReady(true);
+            setLoading(false);
+          });
         return;
       }
 
@@ -62,13 +82,29 @@ function App() {
       if (quotaExhausted) {
         console.log('⚠️ Quota exhausted, using fallback question');
         setError('Daily API limit reached. Using fallback question.');
-        if (FALLBACK_QUESTIONS[currentQuestionIndex]) {
-          setCurrentQuestion(FALLBACK_QUESTIONS[currentQuestionIndex]);
-        } else {
-          setCurrentQuestion(FALLBACK_QUESTIONS[0]);
-        }
+        const fallbackQuestion = FALLBACK_QUESTIONS[currentQuestionIndex] || FALLBACK_QUESTIONS[0];
+        setCurrentQuestion(fallbackQuestion);
         setUsingCache(false);
-        setLoading(false);
+        setAudioReady(false);
+
+        // Generate audio in parallel while showing loading screen
+        speakQuestionAndOptionsElevenLabs(
+          fallbackQuestion.question,
+          fallbackQuestion.options
+        )
+          .then((audio) => {
+            console.log("✅ Audio ready for fallback question");
+            setAudioReady(true);
+            setLoading(false);
+            // Start playing audio when question screen appears
+            audio.play().catch(err => console.error("Audio play failed:", err));
+          })
+          .catch((err) => {
+            console.error("❌ Audio generation failed:", err);
+            // Still show question even if audio fails
+            setAudioReady(true);
+            setLoading(false);
+          });
         return;
       }
 
@@ -90,6 +126,7 @@ function App() {
       setIsCorrect(false);
       setIsWrong(false);
       setShowNextButton(false);
+      setAudioReady(false);
 
       try {
         console.log(`🚀 Fetching question from API for level ${currentLevel}`);
@@ -103,6 +140,7 @@ function App() {
           }
         }
 
+        // Fetch question
         const question = await fetchQuestion(currentLevel, history);
 
         // Save to cache
@@ -111,6 +149,25 @@ function App() {
         setCurrentQuestion(question);
         setError(null);
         setQuotaExhausted(false);
+
+        // Generate audio in parallel while showing loading screen
+        speakQuestionAndOptionsElevenLabs(
+          question.question,
+          question.options
+        )
+          .then((audio) => {
+            console.log("✅ Audio ready - showing question");
+            setAudioReady(true);
+            setLoading(false);
+            // Start playing audio when question screen appears
+            audio.play().catch(err => console.error("Audio play failed:", err));
+          })
+          .catch((err) => {
+            console.error("❌ Audio generation failed:", err);
+            // Still show question even if audio fails
+            setAudioReady(true);
+            setLoading(false);
+          });
       } catch (err) {
         console.error('❌ API Error:', err);
 
@@ -124,13 +181,28 @@ function App() {
         }
 
         // Use fallback question
-        if (FALLBACK_QUESTIONS[currentQuestionIndex]) {
-          setCurrentQuestion(FALLBACK_QUESTIONS[currentQuestionIndex]);
-        } else {
-          setCurrentQuestion(FALLBACK_QUESTIONS[0]);
-        }
+        const fallbackQuestion = FALLBACK_QUESTIONS[currentQuestionIndex] || FALLBACK_QUESTIONS[0];
+        setCurrentQuestion(fallbackQuestion);
+
+        // Generate audio in parallel while showing loading screen
+        speakQuestionAndOptionsElevenLabs(
+          fallbackQuestion.question,
+          fallbackQuestion.options
+        )
+          .then((audio) => {
+            console.log("✅ Audio ready for fallback question");
+            setAudioReady(true);
+            setLoading(false);
+            // Start playing audio when question screen appears
+            audio.play().catch(err => console.error("Audio play failed:", err));
+          })
+          .catch((err) => {
+            console.error("❌ Audio generation failed:", err);
+            // Still show question even if audio fails
+            setAudioReady(true);
+            setLoading(false);
+          });
       } finally {
-        setLoading(false);
         // Release lock after delay
         setTimeout(() => {
           delete FETCH_LOCKS[currentLevel];
@@ -141,30 +213,20 @@ function App() {
     loadQuestion();
   }, [currentQuestionIndex, currentLevel, gameOver]);
 
-  // Speak question and options when a new question is loaded
+  // Cleanup audio when component unmounts or question changes
   useEffect(() => {
-    if (currentQuestion && !loading) {
-      // Wait a bit for the UI to render, then speak
-      const timer = setTimeout(() => {
-        /*speakQuestionAndOptions(
-          currentQuestion.question,
-          currentQuestion.options
-        );*/
-        speakQuestionAndOptionsElevenLabs(
-          currentQuestion.question,
-          currentQuestion.options
-        );
-      }, 500);
-
-      return () => {
-        clearTimeout(timer);
-        // Stop speech if component unmounts or question changes
-        if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
-        }
-      };
-    }
-  }, [currentQuestion, loading]);
+    return () => {
+      // Stop speech if component unmounts or question changes
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      // Stop audio if playing
+      if (window.currentKbcAudio) {
+        window.currentKbcAudio.pause();
+        window.currentKbcAudio = null;
+      }
+    };
+  }, [currentQuestion]);
 
   const handleOptionClick = (optionIndex) => {
     if (isLocked || isRevealed) return;
@@ -217,6 +279,9 @@ function App() {
       window.currentKbcAudio = null;
     }
 
+    // Reset audio ready state
+    setAudioReady(false);
+
     if (currentLevel < 15) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
@@ -254,11 +319,12 @@ function App() {
     setUsingCache(false);
     setError(null);
     setQuotaExhausted(false);
+    setAudioReady(false);
   };
 
   if (gameOver) return <GameOver totalWinnings={totalWinnings} onRestart={handleRestart} />;
 
-  if (loading || !currentQuestion) {
+  if (loading || !currentQuestion || !audioReady) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 text-white flex items-center justify-center">
         <div className="text-center">
