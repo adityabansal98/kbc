@@ -114,6 +114,34 @@ export const playAudio = (type) => {
 };
 
 /**
+ * Plays the intro sound effect and returns a promise that resolves when it finishes
+ * @returns {Promise<void>} Resolves when intro sound effect finishes playing
+ */
+export const playIntroSound = () => {
+    return new Promise((resolve) => {
+        const audio = new Audio('/audio/intro.mp3');
+        audio.volume = 0.7;
+
+        audio.addEventListener('ended', () => {
+            console.log("✅ Intro sound effect finished");
+            resolve();
+        }, { once: true });
+
+        audio.addEventListener('error', (err) => {
+            console.error("Intro sound effect error:", err);
+            // Resolve anyway so we don't block the game
+            resolve();
+        }, { once: true });
+
+        audio.play().catch(err => {
+            console.error('Intro sound playback failed:', err);
+            // Resolve anyway so we don't block the game
+            resolve();
+        });
+    });
+};
+
+/**
  * Plays the question sound effect and returns a promise that resolves when it finishes
  * @returns {Promise<void>} Resolves when question sound effect finishes playing
  */

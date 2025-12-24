@@ -5,7 +5,7 @@ import MoneyLadder from './components/MoneyLadder';
 import GameOver from './components/GameOver';
 import { PRIZE_LADDER, FALLBACK_QUESTIONS } from './data/gameData';
 import { fetchQuestion } from './services/gemini';
-import { playAudio, speakQuestionAndOptions, speakQuestionAndOptionsElevenLabs, playQuestionSound } from './utils/audio';
+import { playAudio, speakQuestionAndOptions, speakQuestionAndOptionsElevenLabs, playQuestionSound, playIntroSound } from './utils/audio';
 import {
   getCachedQuestion,
   saveQuestionToCache,
@@ -32,9 +32,20 @@ function App() {
   const [usingCache, setUsingCache] = useState(false);
   const [quotaExhausted, setQuotaExhausted] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
+  const [introPlayed, setIntroPlayed] = useState(false);
 
   const currentPrize = PRIZE_LADDER[currentQuestionIndex]?.amount || '₹0';
   const currentLevel = currentQuestionIndex + 1;
+
+  // Play intro sound when game starts (first load or restart)
+  useEffect(() => {
+    if (currentQuestionIndex === 0 && !introPlayed && !gameOver) {
+      console.log("🎵 Playing intro sound");
+      playIntroSound().then(() => {
+        setIntroPlayed(true);
+      });
+    }
+  }, [currentQuestionIndex, introPlayed, gameOver]);
 
   useEffect(() => {
     const loadQuestion = async () => {
@@ -43,6 +54,11 @@ function App() {
 
       // Skip if game is over (will be handled by handleRestart)
       if (gameOver) return;
+
+      // Wait for intro to finish before loading first question
+      if (currentQuestionIndex === 0 && !introPlayed) {
+        return;
+      }
 
       // 2. CHECK CACHE FIRST (localStorage with expiration)
       const cachedQuestion = getCachedQuestion(currentLevel);
@@ -235,7 +251,7 @@ function App() {
     };
 
     loadQuestion();
-  }, [currentQuestionIndex, currentLevel, gameOver]);
+  }, [currentQuestionIndex, currentLevel, gameOver, introPlayed]);
 
   // Cleanup audio when component unmounts or question changes
   useEffect(() => {
@@ -344,6 +360,7 @@ function App() {
     setError(null);
     setQuotaExhausted(false);
     setAudioReady(false);
+    setIntroPlayed(false); // Reset intro played so it plays again on restart
   };
 
   if (gameOver) return <GameOver totalWinnings={totalWinnings} onRestart={handleRestart} />;
