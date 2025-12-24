@@ -174,6 +174,13 @@ function App() {
       window.speechSynthesis.cancel();
     }
 
+    // Stop ElevenLabs audio if playing
+    if (window.currentKbcAudio) {
+      window.currentKbcAudio.pause();
+      window.currentKbcAudio.currentTime = 0; // Reset to beginning
+      window.currentKbcAudio = null;
+    }
+
     setSelectedOption(optionIndex);
     setIsLocked(true);
     playAudio('lock');
@@ -201,6 +208,13 @@ function App() {
     // Stop any ongoing speech when moving to next question
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
+    }
+
+    // Stop ElevenLabs audio if playing
+    if (window.currentKbcAudio) {
+      window.currentKbcAudio.pause();
+      window.currentKbcAudio.currentTime = 0;
+      window.currentKbcAudio = null;
     }
 
     if (currentLevel < 15) {
