@@ -5,7 +5,7 @@ import MoneyLadder from './components/MoneyLadder';
 import GameOver from './components/GameOver';
 import { PRIZE_LADDER, FALLBACK_QUESTIONS } from './data/gameData';
 import { fetchQuestion } from './services/gemini';
-import { playAudio, speakQuestionAndOptions } from './utils/audio';
+import { playAudio, speakQuestionAndOptions, speakQuestionAndOptionsElevenLabs } from './utils/audio';
 import {
   getCachedQuestion,
   saveQuestionToCache,
@@ -146,7 +146,11 @@ function App() {
     if (currentQuestion && !loading) {
       // Wait a bit for the UI to render, then speak
       const timer = setTimeout(() => {
-        speakQuestionAndOptions(
+        /*speakQuestionAndOptions(
+          currentQuestion.question,
+          currentQuestion.options
+        );*/
+        speakQuestionAndOptionsElevenLabs(
           currentQuestion.question,
           currentQuestion.options
         );

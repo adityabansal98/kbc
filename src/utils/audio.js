@@ -1,3 +1,79 @@
+const ELEVEN_LABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY;
+const VOICE_ID = 'zgqefOY5FPQ3bB7OZTVR'; // The voice ID you shared
+
+// Play ElevenLabs Voice
+/**
+ * Speaks a question and its options sequentially using ElevenLabs
+ * @param {string} question - The question text
+ * @param {Array<string>} options - Array of option texts
+ */
+export const speakQuestionAndOptionsElevenLabs = async (question, options) => {
+    if (!ELEVEN_LABS_API_KEY) {
+        console.error("Missing VITE_ELEVENLABS_API_KEY in .env");
+        return;
+    }
+
+    // 1. Stop any currently playing audio (essential for game restarts/next question)
+    if (window.currentKbcAudio) {
+        window.currentKbcAudio.pause();
+        window.currentKbcAudio = null;
+    }
+
+    try {
+        console.log("🎙️ Generating ElevenLabs Audio...");
+
+        // 2. Construct a single script with natural pauses
+        // We use "..." and line breaks to force the AI to pause between options
+        const fullScript = `
+            ${question}
+            ...
+            Option A. ${options[0]}
+            ...
+            Option B. ${options[1]}
+            ...
+            Option C. ${options[2]}
+            ...
+            Option D. ${options[3]}
+        `;
+
+        // 3. Call ElevenLabs API
+        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'audio/mpeg',
+                'Content-Type': 'application/json',
+                'xi-api-key': ELEVEN_LABS_API_KEY
+            },
+            body: JSON.stringify({
+                text: fullScript,
+                model_id: "eleven_multilingual_v2", // Best for Hindi accent/pronunciation
+                voice_settings: {
+                    stability: 0.5,        // Lower = more expressive
+                    similarity_boost: 0.75 // Higher = closer to original voice
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail?.message || "ElevenLabs API Error");
+        }
+
+        // 4. Play the result
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+
+        // Save reference globally so we can stop it if the user clicks "Next" quickly
+        window.currentKbcAudio = audio;
+
+        audio.play();
+
+    } catch (error) {
+        console.error("TTS Error:", error);
+    }
+};
+
 /**
  * Audio helper function for KBC game
  * This function will be used to play different audio types
